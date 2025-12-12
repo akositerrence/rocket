@@ -22,8 +22,6 @@ m_payload = 17400
 i_1, i_2, i_3 = 271.6, 302, 316
 bt_1, bt_2, bt_3 = 121.5, 190.0, 223.0
 
-y = 0
-
 ##### GET EFFECTIVE GRAVITY #####
 
 def get_gravity(h):
@@ -156,59 +154,153 @@ def get_drag_force(stage, u_magnitude, y):
         case _:
             return 0.5 * drag_coeff * get_density(y) * frontal_area_2_3 * (u_magnitude**2)
     
-##### TIME STEP SETUP ##### 
+##### GET STAGES R #####
 
-def time_step(dt, mass_load, mass_structure, mass_propellant):
-    time_step = dt
-    total_mass = mass_load + mass_structure + mass_propellant
-    
-    # DETERMINE STAGE
-    if mass_propellant > (m_p2+ m_p3):
-        stage = 1
-    elif mass_propellant > (m_p2):
+def get_stages_r(stage):
+    # EFFECTIVE PAYLOADS
+    ms_effective3 = m_payload
+    ms_effective2 = m_s3 + m_p3 + m_payload
+    ms_effective1 = m_s2 + m_p2 + m_s3 + m_p3 + m_payload
+    ms_effective_list = [ms_effective1, ms_effective2, ms_effective3]
+    m_s_list = [m_s1, m_s2, m_s3]
+    m_p_list = [m_p1, m_p2, m_p3]
+    r_list = []
+
+    for i in range(3):
+        m_eq = m_s_list[i] + m_p_list[i]
+        lambd = ms_effective_list[i] / m_eq 
+        epsilon = m_s_list[i] / m_eq 
+        r = (1.0 + lambd) / (epsilon + lambd)
+        r_list.append(r)
+        
+    current_r = r_list[stage]
+    return current_r
+
+##### STEP #####
+
+def step(x, y, theta, velocity, velocity_x, velocity_y, time_step, stage, payload_mass, mass_propellant_1, mass_propellant_2, mass_propellant_3):
+    if stage == 1 and mass_propellant_1 <= 0:
         stage = 2
-    elif mass_propellant > (0):
+    elif stage == 2 and mass_propellant_2 <= 0:
         stage = 3
-    else:
-        stage = 4
+    elif stage == 3 and mass_propellant_3 <= 0:
+        stage = 4   
+
+    match stage:
+        case 1:
+            current_isp   = i_1
+            current_bt    = bt_1
+            current_fuel  = mass_propellant_1
+            current_total_structural_mass = 88000 + 8000 + 4000
+            
+            current_total_fuel_mass = current_fuel + mass_propellant_2 + mass_propellant_3
+            current_total_mass_before_burn = current_total_structural_mass + current_total_fuel_mass + payload_mass
+            
+            fuel_flow = m_p1 / current_bt 
+            if fuel_flow > current_fuel:
+                fuel_flow = current_fuel
+            current_fuel = current_fuel - (fuel_flow * time_step)
+            
+            current_total_fuel_mass = current_fuel + mass_propellant_2 + mass_propellant_3
+            
+        case 2:
+            current_isp   = i_2
+            current_bt    = bt_2
+            current_fuel  = mass_propellant_2
+            current_total_structural_mass = 8000 + 4000
+            
+            current_total_fuel_mass = current_fuel + mass_propellant_3
+            current_total_mass_before_burn = current_total_structural_mass + current_total_fuel_mass + payload_mass
+            
+            fuel_flow = m_p2 / current_bt 
+            if fuel_flow > current_fuel:
+                fuel_flow = current_fuel
+            current_fuel = current_fuel - (fuel_flow * time_step)
+            
+            current_total_fuel_mass = current_fuel + mass_propellant_3
+            
+        case 3:
+            current_isp   = i_3
+            current_bt    = bt_3
+            current_fuel  = mass_propellant_3
+            current_total_structural_mass = 4000
+            
+            current_total_fuel_mass = current_fuel
+            current_total_mass_before_burn = current_total_structural_mass + current_total_fuel_mass + payload_mass
+            
+            fuel_flow = m_p3 / current_bt 
+            if fuel_flow > current_fuel:
+                fuel_flow = current_fuel
+            current_fuel = current_fuel - (fuel_flow * time_step)
+            
+            current_total_fuel_mass = current_fuel 
+            
+        case _:  
+            current_isp   = 0
+            current_bt    = 1 
+            current_fuel  = 0
+            current_total_structural_mass = 0
+            
+            fuel_flow = 0
+            current_fuel = 0
+            
+            current_total_fuel_mass = 0
     
+    current_total_mass_after_burn = current_total_structural_mass + current_total_fuel_mass + payload_mass
     
-    stage = 1
-
-    mass_propellant = m_p1
-    i_sp = i_1
-    g = g_o
-
-    velocity = 0
-
-    # CHANGE IN MASS
-    fuel_flow = m_p1 / bt_1 
-    mass_propellant = mass_propellant - fuel_flow 
-    total_mass = mass_load + mass_structure + mass_propellant
-
-    # FIND MASS RATIOS
-    lambd_a = mass_load / (mass_structure + mass_propellant)
-    epsilon = mass_structure / (mass_structure + mass_propellant)
-    r = (1 + lambd_a) / (epsilon + lambd_a)
-
-    theta = 0 # degrees
-    u_eq = i_sp * g
-    u_e = u_eq * math.log(r)
+    u_eq = current_isp * g_o
+    u_e = u_eq * math.log(current_total_mass_before_burn / current_total_mass_after_burn)
     u_e_x = u_e * math.sin(math.radians(theta))
     u_e_y = u_e * math.cos(math.radians(theta))
+    
+    u_x_total = u_e_x 
+    u_y_total = u_e_y 
+    
+    velocity_x = velocity_x + u_x_total
+    velocity_y = velocity_y + u_y_total
+    velocity = math.sqrt((velocity_x**2) + (velocity_y**2))
+    
+    x = x + velocity_x * time_step
+    y = y + velocity_y * time_step
+    
+    if stage == 1:
+        mass_propellant_1 = current_fuel
+    elif stage == 2:
+        mass_propellant_2 = current_fuel
+    elif stage == 3:
+        mass_propellant_3 = current_fuel
+    
+    return x, y, theta, velocity, velocity_x, velocity_y, stage, mass_propellant_1, mass_propellant_2, mass_propellant_3
 
-    u_d = time_step * (get_drag_force(1, velocity, y))
-    u_d_x = - u_d * math.sin(math.radians(theta))
-    u_d_y = - u_d * math.cos(math.radians(theta))
+##### INITIALIZATION & LOOP #####
 
-    u_g = u_g_y = time_step * g * math.cos(math.radians(theta))
-    u_g_x = 0
+x = 0
+y = 0
+theta = 0
 
-##### LOOP #####
+time_step = 0.01
+stage = 1
+payload_mass = m_payload
+mass_propellant_1 = m_p1
+mass_propellant_2 = m_p2
+mass_propellant_3 = m_p3
+velocity = 0
+velocity_x = 0
+velocity_y = 0
+time = 0
 
-mass_structure = m_s1 + m_s2 + m_s3
-mass_propellant = m_p1 + m_p2 + m_p3
+x_postitions = []
+y_postitions = []
+times = []
 
-while (y < 185000):
-    dt = 0.01
-    time_step(dt, m_payload, mass_structure, mass_propellant)
+while (y < 200000):
+    time = time + time_step
+    times.append(time)
+    x_postitions.append(x)
+    y_postitions.append(y)
+    x, y, theta, velocity, velocity_x, velocity_y, stage, mass_propellant_1, mass_propellant_2, mass_propellant_3 = step(x, y, theta, velocity, velocity_x, velocity_y, time_step, stage, payload_mass, mass_propellant_1, mass_propellant_2, mass_propellant_3)
+    
+plt.plot(y_postitions, times)
+plt.xlabel(" Time (s) ")
+plt.ylabel(" Altitude (m) ")
+plt.show()

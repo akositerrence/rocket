@@ -1,48 +1,93 @@
-import math
+  
+##### TIME STEP SETUP ##### 
+def time_step(x, y, dt, mass_load, mass_structure, mass_propellant, velocity, velocity_x, velocity_y , stage, isp):
+    time_step = dt
+    total_mass = mass_load + mass_structure + mass_propellant
 
-g_e = 9.8066
-frontal_area_1 = 35.4612
-frontal_area_2_3 = 20.2683
-r_gas = 287
-r_e = 6.356766E6
-y = 0
-
-# GET EFFECTIVE GRAV
-def get_gravity(y):
-    g = g_e*(r_e / (r_e+ y))**2
-    return g
-
-def get_temperature(y):
-    a_1 = -6.5E-3
-    a_2 = 3E-3
-    a_3 = -4.5E-3
-    a_4 = 4E-3
-    h = (r_e / (r_e + y)) * y
-    
-    if 0 <= h and h <= 11000:
-        t = 288.16 + (a_1*h)
-    elif 11000 <= h and h <= 25000:
-        t = 216.66
-    elif 25000 <= h and h <= 47000:
-        t = 216.66 + (a_2*(h-25000))
-    elif 47000 <= h and h <= 53000:
-        t = 282.66
-    elif 53000 <= h and h <= 79000:
-        t = 282.66 + (a_3*(h-53000))
-    elif 79000 <= h and h <= 90000:
-        t = 165.55
-    else:
-        t = 165.55 + (a_4*(h-90000))
+    if stage == 1 and m_p1 <= 0:
+        stage = 2
+        isp = i_2
+    elif (stage == 2 and m_p2 <= 0):
+        stage = 3
+        isp = i_3
+    elif (stage == 3 and m_p3 <= 0): # BALLISTIC
+        stage = 4  
+        isp = 0.0
         
-    return t
+    g = get_gravity(y)
+        
+    # DETMERINE BERUN RATE
+    if (stage == 1):
+        current_stage_propellant = mass_propellant - m_p2 - m_p3
+        fuel_flow = current_stage_propellant / bt_1 
+    elif (stage == 2):
+        current_stage_propellant = mass_propellant - m_p1 - m_p3
+        fuel_flow = current_stage_propellant / bt_2
+    elif (stage == 3):
+        current_stage_propellant = mass_propellant - m_p1 - m_p2
+        fuel_flow = current_stage_propellant / bt_3
 
-a_1 = -6.5E-3
-a_2 = 3E-3
-a_3 = -4.5E-3
-a_4 = 4E-3
+    # CHANGE IN MASS
+    mass_propellant = mass_propellant - (fuel_flow * dt)
+    total_mass = mass_load + mass_structure + mass_propellant
+
+    # FIND MASS RATIOS
+    lambd_a = mass_load / (mass_structure + mass_propellant)
+    epsilon = mass_structure / (mass_structure + mass_propellant)
+    r = (1 + lambd_a) / (epsilon + lambd_a)
+
+    theta = 0 # degrees
+    u_eq = isp * g
+    u_e = u_eq * math.log(r)
+    u_e_x = u_e * math.sin(math.radians(theta))
+    u_e_y = u_e * math.cos(math.radians(theta))
     
-y = 11000
-p_base = 101325
-p = p_base*((get_temperature(y)/288.16)**(-9.80621/(a_1*r_gas)))
+    
 
-print(p)
+    u_d = time_step * ( (get_drag_force(stage, velocity, y)) / total_mass)
+    u_d_x = - u_d * math.sin(math.radians(theta))
+    u_d_y = - u_d * math.cos(math.radians(theta))
+
+    u_g = u_g_y = - time_step * g * math.cos(math.radians(theta))
+    u_g_x = 0
+    
+    u_x_total = u_e_x + u_d_x + u_g_x
+    u_y_total = u_e_y + u_d_y + u_g_y
+    velocity_x = velocity_x + u_x_total
+    velocity_y = velocity_y + u_y_total
+    
+    velocity = math.sqrt((velocity_x**2) + (velocity_y**2))
+    
+    x = x + velocity_x * time_step
+    y = y + velocity_y * time_step
+    
+    return x, y, dt, mass_load, mass_structure, mass_propellant, velocity, velocity_x, velocity_y, stage, isp
+
+##### LOOP #####
+
+mass_structure = m_s1 + m_s2 + m_s3
+mass_propellant = m_p1 + m_p2 + m_p3
+velocity = 0
+velocity_x = 0
+velocity_y = 0
+x, y, = 0, 0
+stage = 1
+isp = i_1
+x_postitions = []
+y_postitions = []
+t_time = []
+t = 0
+
+while (y < 185000):
+    t_time.append(t)
+    dt = 0.01 
+    t = t + dt
+    print(t)
+    x_postitions.append(x)
+    y_postitions.append(y)
+    x, y, dt, mass_load, mass_structure, mass_propellant, velocity, velocity_x, velocity_y, stage, isp = time_step(x, y, dt, m_payload, mass_structure, mass_propellant, velocity, velocity_x, velocity_y, stage, isp)
+    
+plt.plot(x_postitions, t_time)
+plt.xlabel(" Time (s) ")
+plt.ylabel(" Altitude (m)")
+plt.show()
