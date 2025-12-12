@@ -148,11 +148,12 @@ def graph_environment_conditions():
 ##### GET DRAG FORCE #####
 
 def get_drag_force(stage, u_magnitude, y):
+    h = (r_earth / (r_earth + y)) * y
     match stage:
         case 1:
-            return 0.5 * drag_coeff * get_density(y) * frontal_area_1 * (u_magnitude**2)
+            return 0.5 * drag_coeff * get_density(h) * frontal_area_1 * (u_magnitude**2)
         case _:
-            return 0.5 * drag_coeff * get_density(y) * frontal_area_2_3 * (u_magnitude**2)
+            return 0.5 * drag_coeff * get_density(h) * frontal_area_2_3 * (u_magnitude**2)
     
 ##### GET STAGES R #####
 
@@ -248,13 +249,22 @@ def step(x, y, theta, velocity, velocity_x, velocity_y, time_step, stage, payloa
     
     current_total_mass_after_burn = current_total_structural_mass + current_total_fuel_mass + payload_mass
     
-    u_eq = current_isp * g_o
+    g = get_gravity(y)
+    u_eq = current_isp * g
     u_e = u_eq * math.log(current_total_mass_before_burn / current_total_mass_after_burn)
+    
     u_e_x = u_e * math.sin(math.radians(theta))
     u_e_y = u_e * math.cos(math.radians(theta))
     
-    u_x_total = u_e_x 
-    u_y_total = u_e_y 
+    u_g_x = 0
+    u_g_y = - time_step * g * math.cos(math.radians(theta))
+    
+    u_d = time_step * ( (get_drag_force(stage, velocity, y)) / current_total_mass_after_burn)
+    u_d_x = - u_d * math.sin(math.radians(theta))
+    u_d_y = - u_d * math.cos(math.radians(theta))
+    
+    u_x_total = u_e_x + u_g_x + u_d_x
+    u_y_total = u_e_y + u_g_y + u_d_y
     
     velocity_x = velocity_x + u_x_total
     velocity_y = velocity_y + u_y_total
@@ -293,14 +303,15 @@ x_postitions = []
 y_postitions = []
 times = []
 
-while (y < 200000):
+while (y >= 0 and y <= 185000):
     time = time + time_step
     times.append(time)
     x_postitions.append(x)
     y_postitions.append(y)
     x, y, theta, velocity, velocity_x, velocity_y, stage, mass_propellant_1, mass_propellant_2, mass_propellant_3 = step(x, y, theta, velocity, velocity_x, velocity_y, time_step, stage, payload_mass, mass_propellant_1, mass_propellant_2, mass_propellant_3)
     
-plt.plot(y_postitions, times)
+plt.plot(times, y_postitions)
+print(max(y_postitions))
 plt.xlabel(" Time (s) ")
 plt.ylabel(" Altitude (m) ")
 plt.show()
