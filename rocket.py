@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import math
+import csv
 
 drag_coeff = 0.1
 r_earth = 6.356766E6
@@ -179,10 +180,10 @@ def get_stages_r(stage):
 
 ##### STEP #####
 
-def step(time, x, y, theta, velocity, velocity_x, velocity_y, 
+def step(time, x, y, theta, phi, velocity, velocity_x, velocity_y, 
          time_step, stage, payload_mass, mass_propellant_1, 
          mass_propellant_2, mass_propellant_3, gravity_turn_time,
-         gravity_turn_theta_initial, gravity_turn_state):
+         gravity_turn_theta_initial, gravity_turn_state, pd_state):
     
     if stage == 1 and mass_propellant_1 <= 0:
         stage = 2
@@ -202,9 +203,10 @@ def step(time, x, y, theta, velocity, velocity_x, velocity_y,
             current_total_mass_before_burn = current_total_structural_mass + current_total_fuel_mass + payload_mass
             
             fuel_flow = m_p1 / current_bt 
-            if fuel_flow > current_fuel:
-                fuel_flow = current_fuel
-            current_fuel = current_fuel - (fuel_flow * time_step)
+            dm = fuel_flow * time_step       
+            if dm > current_fuel:
+                dm = current_fuel
+            current_fuel -= dm
             
             current_total_fuel_mass = current_fuel + mass_propellant_2 + mass_propellant_3
             
@@ -218,9 +220,10 @@ def step(time, x, y, theta, velocity, velocity_x, velocity_y,
             current_total_mass_before_burn = current_total_structural_mass + current_total_fuel_mass + payload_mass
             
             fuel_flow = m_p2 / current_bt 
-            if fuel_flow > current_fuel:
-                fuel_flow = current_fuel
-            current_fuel = current_fuel - (fuel_flow * time_step)
+            dm = fuel_flow * time_step       
+            if dm > current_fuel:
+                dm = current_fuel
+            current_fuel -= dm
             
             current_total_fuel_mass = current_fuel + mass_propellant_3
             
@@ -234,9 +237,10 @@ def step(time, x, y, theta, velocity, velocity_x, velocity_y,
             current_total_mass_before_burn = current_total_structural_mass + current_total_fuel_mass + payload_mass
             
             fuel_flow = m_p3 / current_bt 
-            if fuel_flow > current_fuel:
-                fuel_flow = current_fuel
-            current_fuel = current_fuel - (fuel_flow * time_step)
+            dm = fuel_flow * time_step       
+            if dm > current_fuel:
+                dm = current_fuel
+            current_fuel -= dm
             
             current_total_fuel_mass = current_fuel 
             
@@ -245,6 +249,9 @@ def step(time, x, y, theta, velocity, velocity_x, velocity_y,
             current_bt    = 1 
             current_fuel  = 0
             current_total_structural_mass = 0
+
+            current_total_fuel_mass = 0
+            current_total_mass_before_burn = 17400
             
             fuel_flow = 0
             current_fuel = 0
@@ -252,25 +259,48 @@ def step(time, x, y, theta, velocity, velocity_x, velocity_y,
             current_total_fuel_mass = 0
     
     if (gravity_turn_state == False) and (time >= gravity_turn_time):
-        theta = gravity_turn_theta_initial
-        gravity_turn_state = True
-    
-    
+        phi = math.radians(gravity_turn_theta_initial)
+    else:
+        phi = 0
+
+    if (y >= 185000):
+        pd_state = True
+
+    if pd_state == True:
+        target_altitude = 185000
+        velocity_y_target = 0
+        phi_max = math.radians(1)
+        
+        if (current_isp > 0) and (y != target_altitude):
+            altitude_error = y - target_altitude
+            vy_error = velocity_y - velocity_y_target
+            P = 1
+            D = 1
+
+            phi_cmd = (P * altitude_error) + (D * vy_error)
+
+            if phi_cmd > phi_max:
+                phi_cmd = phi_max
+            elif phi_cmd < -phi_max:
+                phi_cmd = -phi_max
+
+            phi = phi_cmd
+        
     current_total_mass_after_burn = current_total_structural_mass + current_total_fuel_mass + payload_mass
     
     g = get_gravity(y)
     u_eq = current_isp * g
     u_e = u_eq * math.log(current_total_mass_before_burn / current_total_mass_after_burn)
     
-    u_e_x = u_e * math.sin(math.radians(theta))
-    u_e_y = u_e * math.cos(math.radians(theta))
+    u_e_x = u_e * math.sin(theta + phi)
+    u_e_y = u_e * math.cos(theta + phi)
     
     u_g_x = 0
     u_g_y = - time_step * g
     
     u_d = time_step * ( (get_drag_force(stage, velocity, y)) / current_total_mass_after_burn)
-    u_d_x = - u_d * math.sin(math.radians(theta))
-    u_d_y = - u_d * math.cos(math.radians(theta))
+    u_d_x = - u_d * math.sin(theta)
+    u_d_y = - u_d * math.cos(theta)
     
     u_x_total = u_e_x + u_g_x + u_d_x
     u_y_total = u_e_y + u_g_y + u_d_y
@@ -278,7 +308,8 @@ def step(time, x, y, theta, velocity, velocity_x, velocity_y,
     velocity_x = velocity_x + u_x_total
     velocity_y = velocity_y + u_y_total
     velocity = math.sqrt((velocity_x**2) + (velocity_y**2))
-    
+    theta = math.atan2(velocity_x, velocity_y)
+
     x = x + velocity_x * time_step
     y = y + velocity_y * time_step
     
@@ -289,13 +320,14 @@ def step(time, x, y, theta, velocity, velocity_x, velocity_y,
     elif stage == 3:
         mass_propellant_3 = current_fuel
     
-    return time, x, y, theta, velocity, velocity_x, velocity_y, stage, mass_propellant_1, mass_propellant_2, mass_propellant_3, gravity_turn_time, gravity_turn_theta_initial, gravity_turn_state
+    return time, x, y, theta, phi, velocity, velocity_x, velocity_y, stage, mass_propellant_1, mass_propellant_2, mass_propellant_3, gravity_turn_time, gravity_turn_theta_initial, gravity_turn_state, pd_state
 
 ##### INITIALIZATION & LOOP #####
 
 x = 0
 y = 0
 theta = 0
+phi = 0
 
 time_step = 0.01
 stage = 1
@@ -310,22 +342,115 @@ time = 0
 
 x_postitions = []
 y_postitions = []
+velocities = []
+thetas = []
 times = []
 
-gravity_turn_state = True
+stage_events = []
+prev_stage = 1
+
+gravity_turn_state = False
 gravity_turn_time = 60
-gravity_turn_theta_initial = 1
+gravity_turn_theta_initial = 0.01
 
-while (y >= 0 and y <= 185000):
-    time = time + time_step
-    times.append(time)
-    x_postitions.append(x)
-    y_postitions.append(y)
-    time, x, y, theta, velocity, velocity_x, velocity_y, stage, mass_propellant_1, mass_propellant_2, mass_propellant_3, gravity_turn_time, gravity_turn_theta_initial, gravity_turn_state = step(time, x, y, theta, velocity, velocity_x, velocity_y, time_step, stage, payload_mass, mass_propellant_1, mass_propellant_2, mass_propellant_3, gravity_turn_time, gravity_turn_theta_initial, gravity_turn_state)
+pd_state = False
+pd_flag = False
 
-plt.text(2.5, 7.0, f'Apogee: {max(y_postitions)}', fontsize=11, color='black')
-plt.plot(x_postitions, y_postitions)
-plt.grid(True)
-plt.xlabel(" Axial Distance (x) ")
-plt.ylabel(" Altitude (m) ")
-plt.savefig("plot.jpeg", dpi=800)
+with open("bruhlog.csv", "w", newline="") as f: 
+    writer = csv.writer(f)
+    writer.writerow(["bruh"])
+
+    while (y >= 0 and y <= 10000000):
+        time = time + time_step
+        times.append(time)
+        x_postitions.append(x)
+        y_postitions.append(y)
+        velocities.append(velocity)
+        thetas.append(math.degrees(theta))
+        time, x, y, theta, phi, velocity, velocity_x, velocity_y, stage, mass_propellant_1, mass_propellant_2, mass_propellant_3, gravity_turn_time, gravity_turn_theta_initial, gravity_turn_state, pd_state = step(time, x, y, theta, phi, velocity, velocity_x, velocity_y, time_step, stage, payload_mass, mass_propellant_1, mass_propellant_2, mass_propellant_3, gravity_turn_time, gravity_turn_theta_initial, gravity_turn_state, pd_state)
+        if stage != prev_stage:
+            stage_events.append((time, x, y, stage))
+            prev_stage = stage
+        if (pd_state == True) and (pd_flag == False):
+            pd_flag = True
+            stage_events.append((time, x, y, "PD"))
+        # writer.writerow([velocity])
+
+#for (t_evt, x_evt, y_evt, stg) in stage_events:
+    #plt.scatter([x_evt], [y_evt], zorder=5)                     
+    #plt.annotate(f"[{stg}]", (x_evt, y_evt),     
+    #             textcoords="offset points", xytext=(8, 8))
+    
+# plt.text(2.5, 7.0, f'Apogee: {max(y_postitions)}', fontsize=11, color='black')
+
+
+
+#### vvvv chatgpt wrote the stuff below this #####
+# =========================
+#   MULTI-PLOT SUMMARY
+# =========================
+t = np.array(times)
+x_arr = np.array(x_postitions)
+y_arr = np.array(y_postitions)
+speed_arr = np.array(velocities)     # now speed magnitude because you appended `velocity`
+theta_arr = np.array(thetas)
+
+# Safety: align lengths (your arrays can be off by 1 depending on when you append)
+n = min(len(t), len(speed_arr), len(x_arr), len(y_arr), len(theta_arr))
+t = t[:n]; x_arr = x_arr[:n]; y_arr = y_arr[:n]; speed_arr = speed_arr[:n]; theta_arr = theta_arr[:n]
+
+fig, ax = plt.subplots(2, 2, figsize=(14, 9))
+
+# 1) Speed vs time
+ax[0,0].plot(t, speed_arr)
+ax[0,0].set_title("Speed vs Time")
+ax[0,0].set_xlabel("Time (s)")
+ax[0,0].set_ylabel("Speed (m/s)")
+ax[0,0].grid(True)
+
+# 2) Altitude vs time
+ax[0,1].plot(t, y_arr)
+ax[0,1].axhline(185000, linestyle="--", linewidth=1)
+ax[0,1].set_title("Altitude vs Time")
+ax[0,1].set_xlabel("Time (s)")
+ax[0,1].set_ylabel("Altitude y (m)")
+ax[0,1].grid(True)
+
+# 3) Theta vs time
+ax[1,0].plot(t, theta_arr)
+ax[1,0].set_title("Flight Path Angle vs Time")
+ax[1,0].set_xlabel("Time (s)")
+ax[1,0].set_ylabel("theta (deg)")
+ax[1,0].grid(True)
+# --- mark PD start on theta vs time ---
+pd_events = [(t_evt, x_evt, y_evt, stg) for (t_evt, x_evt, y_evt, stg) in stage_events if str(stg) == "PD"]
+if len(pd_events) > 0:
+    t_pd, x_pd, y_pd, stg = pd_events[0]
+
+    # vertical line at PD start time
+    ax[1,0].axvline(t_pd, linestyle="--", linewidth=1)
+
+    # put a dot at the actual theta value at that time (nearest index)
+    i_pd = int(np.argmin(np.abs(t - t_pd)))
+    ax[1,0].scatter([t[i_pd]], [theta_arr[i_pd]], zorder=5)
+
+    ax[1,0].annotate("PD start", (t[i_pd], theta_arr[i_pd]),
+                     textcoords="offset points", xytext=(8, 8), fontsize=9)
+
+
+# 4) Trajectory x vs y + stage/PD start markers
+ax_xy = ax[1,1]
+ax_xy.plot(x_arr, y_arr, linewidth=1.5)
+ax_xy.axhline(185000, linestyle="--", linewidth=1)
+ax_xy.set_title("Trajectory (x vs y)")
+ax_xy.set_xlabel("x (m)")
+ax_xy.set_ylabel("y (m)")
+ax_xy.grid(True)
+
+for (t_evt, x_evt, y_evt, stg) in stage_events:
+    ax_xy.scatter([x_evt], [y_evt], s=40, zorder=5)
+    ax_xy.annotate(f"{stg}", (x_evt, y_evt),
+                   textcoords="offset points", xytext=(8, 8), fontsize=9)
+
+plt.tight_layout()
+plt.show()
