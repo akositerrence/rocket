@@ -258,12 +258,14 @@ def step(time, x, y, theta, phi, velocity, velocity_x, velocity_y,
             
             current_total_fuel_mass = 0
     
+    ############################################################################
+
     if (gravity_turn_state == False) and (time >= gravity_turn_time):
         phi = math.radians(gravity_turn_theta_initial)
     else:
         phi = 0
 
-    if (y >= 185000):
+    if (y >= 185000 - 2000):
         pd_state = True
 
     if pd_state == True:
@@ -274,8 +276,8 @@ def step(time, x, y, theta, phi, velocity, velocity_x, velocity_y,
         if (current_isp > 0) and (y != target_altitude):
             altitude_error = y - target_altitude
             vy_error = velocity_y - velocity_y_target
-            P = 1
-            D = 1
+            P = 1e-5
+            D = 1e-5
 
             phi_cmd = (P * altitude_error) + (D * vy_error)
 
@@ -285,6 +287,8 @@ def step(time, x, y, theta, phi, velocity, velocity_x, velocity_y,
                 phi_cmd = -phi_max
 
             phi = phi_cmd
+
+    ############################################################################
         
     current_total_mass_after_burn = current_total_structural_mass + current_total_fuel_mass + payload_mass
     
@@ -350,7 +354,7 @@ stage_events = []
 prev_stage = 1
 
 gravity_turn_state = False
-gravity_turn_time = 60
+gravity_turn_time = 5
 gravity_turn_theta_initial = 0.01
 
 pd_state = False
