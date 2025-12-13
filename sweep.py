@@ -292,40 +292,67 @@ def step(time, x, y, theta, velocity, velocity_x, velocity_y,
     return time, x, y, theta, velocity, velocity_x, velocity_y, stage, mass_propellant_1, mass_propellant_2, mass_propellant_3, gravity_turn_time, gravity_turn_theta_initial, gravity_turn_state
 
 ##### INITIALIZATION & LOOP #####
+def loop(gravity_turn_time = 0, gravity_turn_theta_initial = 0):
+    x = 0
+    y = 0
+    theta = 0
 
-x = 0
-y = 0
-theta = 0
+    time_step = 0.01
+    stage = 1
+    payload_mass = m_payload
+    mass_propellant_1 = m_p1
+    mass_propellant_2 = m_p2
+    mass_propellant_3 = m_p3
+    velocity = 0
+    velocity_x = 0
+    velocity_y = 0
+    time = 0
 
-time_step = 0.01
-stage = 1
-payload_mass = m_payload
-mass_propellant_1 = m_p1
-mass_propellant_2 = m_p2
-mass_propellant_3 = m_p3
-velocity = 0
-velocity_x = 0
-velocity_y = 0
-time = 0
+    x_postitions = []
+    y_postitions = []
+    times = []
 
-x_postitions = []
-y_postitions = []
-times = []
+    gravity_turn_state = False
 
-gravity_turn_state = True
-gravity_turn_time = 60
-gravity_turn_theta_initial = 1
-
-while (y >= 0 and y <= 185000):
-    time = time + time_step
-    times.append(time)
-    x_postitions.append(x)
-    y_postitions.append(y)
-    time, x, y, theta, velocity, velocity_x, velocity_y, stage, mass_propellant_1, mass_propellant_2, mass_propellant_3, gravity_turn_time, gravity_turn_theta_initial, gravity_turn_state = step(time, x, y, theta, velocity, velocity_x, velocity_y, time_step, stage, payload_mass, mass_propellant_1, mass_propellant_2, mass_propellant_3, gravity_turn_time, gravity_turn_theta_initial, gravity_turn_state)
-
-plt.text(2.5, 7.0, f'Apogee: {max(y_postitions)}', fontsize=11, color='black')
-plt.plot(x_postitions, y_postitions)
-plt.grid(True)
-plt.xlabel(" Axial Distance (x) ")
-plt.ylabel(" Altitude (m) ")
-plt.savefig("plot.jpeg", dpi=800)
+    while (y >= 0 and y <= 185000):
+        time = time + time_step
+        times.append(time)
+        x_postitions.append(x)
+        y_postitions.append(y)
+        time, x, y, theta, velocity, velocity_x, velocity_y, stage, mass_propellant_1, mass_propellant_2, mass_propellant_3, gravity_turn_time, gravity_turn_theta_initial, gravity_turn_state = step(time, x, y, theta, velocity, velocity_x, velocity_y, time_step, stage, payload_mass, mass_propellant_1, mass_propellant_2, mass_propellant_3, gravity_turn_time, gravity_turn_theta_initial, gravity_turn_state)
+        
+    plt.plot(x,y)
+        
+def main():
+    # DEFINE PARAMETRIC SWEEP
+    gravity_turn_time_parameter = np.linspace(0, 5, 5)
+    gravity_angle_parameter = np.linspace(0.01, 0.05 , 5)
+    
+    # SWEEP
+    for i in range(len(gravity_angle_parameter)):
+        loop(gravity_turn_time=gravity_angle_parameter[i])
+    
+    plt.grid(True)
+    plt.xlabel(" Axial Distance (x) ")
+    plt.ylabel(" Altitude (m) ")
+    plt.show()
+        
+main()
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    #for i in range(len(gravity_turn_time_parameter)):
+    #   
+    #    for j in range(len(gravity_angle_parameter)):
