@@ -179,9 +179,7 @@ def get_stages_r(stage):
 
 ##### STEP #####
 
-times_arr = [] 
-x_arr = []
-y_arr = []
+orbital_insertion = [0,0,0]
 
 def step(time, x, y, theta, phi, velocity, velocity_x, velocity_y, 
          time_step, stage, payload_mass, mass_propellant_1, 
@@ -189,9 +187,7 @@ def step(time, x, y, theta, phi, velocity, velocity_x, velocity_y,
          gravity_turn_theta_initial, gravity_turn_state,
          apogee_lock, apogee_y, apogee_speed, apogee_event):
     
-    global times_arr
-    global x_arr
-    global y_arr
+    global orbital_insertion
     
     if stage == 1 and mass_propellant_1 <= 0:
         stage = 2
@@ -333,6 +329,7 @@ def step(time, x, y, theta, phi, velocity, velocity_x, velocity_y,
     
     if (y >= apogee_y) and (apogee_event == False):
         apogee_y = y
+        orbital_insertion = [velocity, gravity_turn_time, gravity_turn_theta_initial]
     else: 
         apogee_event = True
         apogee_lock = True
@@ -346,47 +343,70 @@ def step(time, x, y, theta, phi, velocity, velocity_x, velocity_y,
         mass_propellant_2 = current_fuel
     elif stage == 3:
         mass_propellant_3 = current_fuel
-        
-    times_arr.append(time)
-    x_arr.append(x)
-    y_arr.append(y)
-    
+
     return time, x, y, theta, phi, velocity, velocity_x, velocity_y, stage, mass_propellant_1, mass_propellant_2, mass_propellant_3, gravity_turn_time, gravity_turn_theta_initial, gravity_turn_state, apogee_lock, apogee_y, apogee_speed, apogee_event
 
 ##### INITIALIZATION & LOOP #####
 
-x = 0
-y = 0
-theta = 0
-phi = 0
+def main(gravity_turn_time, gravity_turn_theta_initial):
+    global orbital_insertion
+    orbital_insertion = [0,0,0]
+    x = 0
+    y = 0
+    theta = 0
+    phi = 0
 
-time_step = 0.01
-stage = 1
-payload_mass = m_payload
-mass_propellant_1 = m_p1
-mass_propellant_2 = m_p2
-mass_propellant_3 = m_p3
-velocity = 0
-velocity_x = 0
-velocity_y = 0
-time = 0
+    time_step = 0.01
+    stage = 1
+    payload_mass = m_payload
+    mass_propellant_1 = m_p1
+    mass_propellant_2 = m_p2
+    mass_propellant_3 = m_p3
+    velocity = 0
+    velocity_x = 0
+    velocity_y = 0
+    time = 0
 
-gravity_turn_state = False
-gravity_turn_time = 10
-gravity_turn_theta_initial = 1
+    gravity_turn_state = False
+    apogee_event = False
+    apogee_lock = False
+    apogee_y = 0.0
+    apogee_speed = 0.0
 
-apogee_event = False
-apogee_lock = False
-apogee_y = 0.0
-apogee_speed = 0.0
+    while (y >= 0 and y <= 10000000 and time < 3000):
+        time = time + time_step
+        time, x, y, theta, phi, velocity, velocity_x, velocity_y, stage, mass_propellant_1, mass_propellant_2, mass_propellant_3, gravity_turn_time, gravity_turn_theta_initial, gravity_turn_state, apogee_lock, apogee_y, apogee_speed, apogee_event = step(time, x, y, theta, phi, velocity, velocity_x, velocity_y, time_step, stage, payload_mass, mass_propellant_1, mass_propellant_2, mass_propellant_3, gravity_turn_time, gravity_turn_theta_initial, gravity_turn_state, apogee_lock, apogee_y, apogee_speed, apogee_event)
 
-while (y >= 0 and y <= 10000000 and time < 3000):
-    time = time + time_step
-    time, x, y, theta, phi, velocity, velocity_x, velocity_y, stage, mass_propellant_1, mass_propellant_2, mass_propellant_3, gravity_turn_time, gravity_turn_theta_initial, gravity_turn_state, apogee_lock, apogee_y, apogee_speed, apogee_event = step(time, x, y, theta, phi, velocity, velocity_x, velocity_y, time_step, stage, payload_mass, mass_propellant_1, mass_propellant_2, mass_propellant_3, gravity_turn_time, gravity_turn_theta_initial, gravity_turn_state, apogee_lock, apogee_y, apogee_speed, apogee_event)
-    
-fig1, ax1 = plt.subplots()
-ax1.plot(x_arr, y_arr)
-ax1.set_xlabel("x position [m]")
-ax1.set_ylabel("y position [m]")
-ax1.grid(True)
-fig1.savefig("gravity_turn_case_position.png", dpi = 500)
+### SWEEP ###
+
+time_interval = 1
+angle_interval = 0.1
+time_sweep = np.linspace(0, 60, int(60/time_interval) + time_interval)     
+angle_sweep = np.linspace(0.01, 1.0, int((1.0-angle_interval)/angle_interval) + 1)  
+
+z_vals = []
+x_vals = []
+y_vals = []
+
+sim_instance = 0
+
+for i in range(len(time_sweep)):
+    for j in range(len(angle_sweep)):    
+        main(time_sweep[i], angle_sweep[j])
+        z, x, y = orbital_insertion
+        z_vals.append(z)
+        x_vals.append(x)
+        y_vals.append(y)
+        sim_instance = sim_instance + 1
+        if sim_instance % 25 == 0:
+            print(sim_instance)
+        
+idx = int(np.argmax(z_vals))
+
+best_z = z_vals[idx]
+best_x = x_vals[idx]
+best_y = y_vals[idx]
+
+print("best z:", best_z)
+print("corresponding x:", best_x)
+print("corresponding y:", best_y)
